@@ -17,7 +17,7 @@
   <build_depend>mapconversion_msgs</build_depend>
   <build_depend>tf2</build_depend>
   <build_depend>tf2_ros</build_depend>
-  <build_depend>Eigen3</build_depend>
+  <build_depend>eigen</build_depend>
   <depend>octomap_msgs</depend>
   <depend>octomap</depend>
 
