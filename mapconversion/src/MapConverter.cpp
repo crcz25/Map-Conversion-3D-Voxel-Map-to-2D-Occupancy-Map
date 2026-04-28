@@ -82,8 +82,8 @@ void MapConverter::updateMap(vector<voxel> vMap, vector<double> minMax) {
       for (auto d : DIRECTIONS) {
         if (hMap.free[x + d.x][y + d.y].size() != 0)
           continue;
-        map.set(hMap.posMap[x + d.x][y + d.y].x, hMap.posMap[x][y].y,
-                hMap.getOccupation(x + d.x, y + d.y, -1, minOcc));
+        // map.set(hMap.posMap[x + d.x][y + d.y].x, hMap.posMap[x][y].y, hMap.getOccupation(x + d.x, y + d.y, -1, minOcc));
+        map.set(hMap.posMap[x + d.x][y + d.y].x, hMap.posMap[x + d.x][y + d.y].y, hMap.getOccupation(x + d.x, y + d.y, -1, minOcc));
       }
     }
   }
