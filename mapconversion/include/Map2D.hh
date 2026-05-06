@@ -1,5 +1,6 @@
 #pragma once
 #include "datatypes.hh"
+#include <cmath>
 const int SUBMAP_SIZE = 128;
 
 class Map2D {
@@ -62,8 +63,8 @@ public:
 
   // get occupancy data at the x y position
   int get(double x, double y) {
-    int posX = (x - mapOffsetX) / resolution;
-    int posY = (y - mapOffsetY) / resolution;
+    int posX = positionToIndex(x, mapOffsetX);
+    int posY = positionToIndex(y, mapOffsetY);
     return get(posX, posY);
   }
   // get occupancy data at the x y index
@@ -74,12 +75,14 @@ public:
       return -1;
     x += subMapOffsetX;
     y += subMapOffsetY;
-    int subIndexX = x / SUBMAP_SIZE;
-    int subIndexY = y / SUBMAP_SIZE;
+    int subIndexX = floorDiv(x, SUBMAP_SIZE);
+    int subIndexY = floorDiv(y, SUBMAP_SIZE);
+    if (!isValidSubMapIndex(subIndexX, subIndexY))
+      return -1;
     if (subMap[subIndexX][subIndexY] == nullptr)
       return -1;
-    int indexX = x % SUBMAP_SIZE;
-    int indexY = y % SUBMAP_SIZE;
+    int indexX = positiveModulo(x, SUBMAP_SIZE);
+    int indexY = positiveModulo(y, SUBMAP_SIZE);
     return subMap[subIndexX][subIndexY][indexX][indexY];
   }
   // get occupancy data at x y filtered through slope threshold
@@ -107,12 +110,14 @@ public:
       return NAN;
     x += subMapOffsetX;
     y += subMapOffsetY;
-    int subIndexX = x / SUBMAP_SIZE;
-    int subIndexY = y / SUBMAP_SIZE;
+    int subIndexX = floorDiv(x, SUBMAP_SIZE);
+    int subIndexY = floorDiv(y, SUBMAP_SIZE);
+    if (!isValidSubMapIndex(subIndexX, subIndexY))
+      return NAN;
     if (subMapHeight[subIndexX][subIndexY] == nullptr)
       return NAN;
-    int indexX = x % SUBMAP_SIZE;
-    int indexY = y % SUBMAP_SIZE;
+    int indexX = positiveModulo(x, SUBMAP_SIZE);
+    int indexY = positiveModulo(y, SUBMAP_SIZE);
     return subMapHeight[subIndexX][subIndexY][indexX][indexY];
   }
 
@@ -134,12 +139,14 @@ public:
       return NAN;
     x += subMapOffsetX;
     y += subMapOffsetY;
-    int subIndexX = x / SUBMAP_SIZE;
-    int subIndexY = y / SUBMAP_SIZE;
+    int subIndexX = floorDiv(x, SUBMAP_SIZE);
+    int subIndexY = floorDiv(y, SUBMAP_SIZE);
+    if (!isValidSubMapIndex(subIndexX, subIndexY))
+      return NAN;
     if (subMapHeightTop[subIndexX][subIndexY] == nullptr)
       return NAN;
-    int indexX = x % SUBMAP_SIZE;
-    int indexY = y % SUBMAP_SIZE;
+    int indexX = positiveModulo(x, SUBMAP_SIZE);
+    int indexY = positiveModulo(y, SUBMAP_SIZE);
     return subMapHeightTop[subIndexX][subIndexY][indexX][indexY];
   }
 
@@ -161,12 +168,14 @@ public:
       return NAN;
     x += subMapOffsetX;
     y += subMapOffsetY;
-    int subIndexX = x / SUBMAP_SIZE;
-    int subIndexY = y / SUBMAP_SIZE;
+    int subIndexX = floorDiv(x, SUBMAP_SIZE);
+    int subIndexY = floorDiv(y, SUBMAP_SIZE);
+    if (!isValidSubMapIndex(subIndexX, subIndexY))
+      return NAN;
     if (subMapSlope[subIndexX][subIndexY] == nullptr)
       return NAN;
-    int indexX = x % SUBMAP_SIZE;
-    int indexY = y % SUBMAP_SIZE;
+    int indexX = positiveModulo(x, SUBMAP_SIZE);
+    int indexY = positiveModulo(y, SUBMAP_SIZE);
     return subMapSlope[subIndexX][subIndexY][indexX][indexY];
   }
 
@@ -185,8 +194,8 @@ public:
 
   // set occupancy value at the x y position
   void set(double x, double y, int value) {
-    int posX = (x - mapOffsetX) / resolution;
-    int posY = (y - mapOffsetY) / resolution;
+    int posX = positionToIndex(x, mapOffsetX);
+    int posY = positionToIndex(y, mapOffsetY);
     set(posX, posY, value);
   }
   // set occupancy value at the x y index
@@ -200,8 +209,8 @@ public:
 
   // set floor heigt value at the x y position
   void setHeight(double x, double y, double value) {
-    int posX = (x - mapOffsetX) / resolution;
-    int posY = (y - mapOffsetY) / resolution;
+    int posX = positionToIndex(x, mapOffsetX);
+    int posY = positionToIndex(y, mapOffsetY);
     setHeight(posX, posY, value);
   }
   // set floor heigt value at the x y index
@@ -215,8 +224,8 @@ public:
 
   // set ceiling heigt value at the x y position
   void setHeightTop(double x, double y, double value) {
-    int posX = (x - mapOffsetX) / resolution;
-    int posY = (y - mapOffsetY) / resolution;
+    int posX = positionToIndex(x, mapOffsetX);
+    int posY = positionToIndex(y, mapOffsetY);
     setHeightTop(posX, posY, value);
   }
   // set ceiling heigt value at the x y index
@@ -230,8 +239,8 @@ public:
 
   // set slope value at the x y position
   void setSlope(double x, double y, double value) {
-    int posX = (x - mapOffsetX) / resolution;
-    int posY = (y - mapOffsetY) / resolution;
+    int posX = positionToIndex(x, mapOffsetX);
+    int posY = positionToIndex(y, mapOffsetY);
     setSlope(posX, posY, value);
   }
   // set slope value at the x y index
@@ -251,10 +260,10 @@ public:
   // update slope in region of map in specified area
   void updateSlope(int areaSize, double minX, double maxX, double minY,
                    double maxY) {
-    int posMinX = (minX - mapOffsetX) / resolution;
-    int posMaxX = (maxX - mapOffsetX) / resolution;
-    int posMinY = (minY - mapOffsetY) / resolution;
-    int posMaxY = (maxY - mapOffsetY) / resolution;
+    int posMinX = positionToIndex(minX, mapOffsetX);
+    int posMaxX = positionToIndex(maxX, mapOffsetX);
+    int posMinY = positionToIndex(minY, mapOffsetY);
+    int posMaxY = positionToIndex(maxY, mapOffsetY);
     updateSlope(areaSize, posMinX, posMaxX, posMinY, posMaxY);
   }
   void updateSlope(int areaSize, int minX, int maxX, int minY, int maxY) {
@@ -290,6 +299,10 @@ private:
   double mapOffsetX, mapOffsetY;
   double resolution;
   MatrixXd preCalcA;
+
+  int positionToIndex(double position, double offset) const {
+    return static_cast<int>(std::floor((position - offset) / resolution));
+  }
 
   // fits to palne and calculates slope of plane and return maximum slope
   point2D getSlopeOfPoints(vector<point3D> points) {
@@ -327,11 +340,11 @@ private:
     if (sizeX() > x && x >= 0 && sizeY() > y && y >= 0) {
       x += subMapOffsetX;
       y += subMapOffsetY;
-      subIndexX = x / SUBMAP_SIZE;
-      subIndexY = y / SUBMAP_SIZE;
+      subIndexX = floorDiv(x, SUBMAP_SIZE);
+      subIndexY = floorDiv(y, SUBMAP_SIZE);
 
-      indexX = x % SUBMAP_SIZE;
-      indexY = y % SUBMAP_SIZE;
+      indexX = positiveModulo(x, SUBMAP_SIZE);
+      indexY = positiveModulo(y, SUBMAP_SIZE);
       return;
     }
     if (sizeX() <= x) {
@@ -352,8 +365,8 @@ private:
     }
     x += subMapOffsetX;
     y += subMapOffsetY;
-    subIndexX = x / SUBMAP_SIZE - signbit(x);
-    subIndexY = y / SUBMAP_SIZE - signbit(y);
+    subIndexX = floorDiv(x, SUBMAP_SIZE);
+    subIndexY = floorDiv(y, SUBMAP_SIZE);
 
     int growX = 0, growY = 0;
     if (subMap.size() <= subIndexX) {
@@ -369,16 +382,16 @@ private:
     if (growX != 0 || growY != 0) {
       growSubMaps(growX, growY);
       if (subIndexX < 0) {
-        x = subMapOffsetX - 1;
-        subIndexX = x / SUBMAP_SIZE;
+        x = subMapOffsetX;
+        subIndexX = floorDiv(x, SUBMAP_SIZE);
       }
       if (subIndexY < 0) {
-        y = subMapOffsetY - 1;
-        subIndexY = y / SUBMAP_SIZE;
+        y = subMapOffsetY;
+        subIndexY = floorDiv(y, SUBMAP_SIZE);
       }
     }
-    indexX = x % SUBMAP_SIZE;
-    indexY = y % SUBMAP_SIZE;
+    indexX = positiveModulo(x, SUBMAP_SIZE);
+    indexY = positiveModulo(y, SUBMAP_SIZE);
   }
 
   void growSubMaps(int growX, int growY) {
@@ -418,12 +431,35 @@ private:
         newSubMapSlope[x + offsetIndexX][y + offsetIndexY] = subMapSlope[x][y];
       }
     }
-    subMapOffsetX += offsetIndexX * (SUBMAP_SIZE + 1);
-    subMapOffsetY += offsetIndexY * (SUBMAP_SIZE + 1);
+    subMapOffsetX += offsetIndexX * SUBMAP_SIZE;
+    subMapOffsetY += offsetIndexY * SUBMAP_SIZE;
     subMap = newSubMap;
     subMapHeight = newSubMapHeight;
     subMapHeightTop = newSubMapHeightTop;
     subMapSlope = newSubMapSlope;
+  }
+
+  int floorDiv(int numerator, int denominator) const {
+    int quotient = numerator / denominator;
+    int remainder = numerator % denominator;
+    if (remainder != 0 && ((remainder < 0) != (denominator < 0)))
+      --quotient;
+    return quotient;
+  }
+
+  int positiveModulo(int numerator, int denominator) const {
+    int remainder = numerator % denominator;
+    return remainder < 0 ? remainder + denominator : remainder;
+  }
+
+  bool isValidSubMapIndex(int subIndexX, int subIndexY) const {
+    if (subIndexX < 0 || subIndexY < 0)
+      return false;
+    if (subIndexX >= static_cast<int>(subMap.size()))
+      return false;
+    if (subMap.empty() || subIndexY >= static_cast<int>(subMap[0].size()))
+      return false;
+    return true;
   }
 
   int **generateSubMapInt() {

@@ -2,6 +2,9 @@
 #include "MapConverter.hh"
 #include "HeightRangeMap.hh"
 
+#include <algorithm>
+#include <cmath>
+
 MapConverter::MapConverter(double resolution, int slopeEstimationSize,
                            double minimumZ, int minimumOccupancy) {
   MapConverter::resolution = resolution;
@@ -17,24 +20,62 @@ MapConverter::~MapConverter() {}
 void MapConverter::updateMap(vector<voxel> vMap, vector<double> minMax) {
   if (vMap.size() == 0)
     return;
-  for (double mM : minMax)
-    if (isinf(mM))
-      return; // If too few voxels of target resolution reserved to get the size
+
+  // Check for NaN and infinity values - NaN can cause huge size calculations
+  for (size_t i = 0; i < minMax.size(); ++i) {
+    if (std::isnan(minMax[i])) {
+      fprintf(stderr, "ERROR: NaN value in minMax at index %zu\n", i);
+      return;
+    }
+    if (std::isinf(minMax[i])) {
+      fprintf(stderr, "ERROR: Infinity value in minMax at index %zu\n", i);
+      return;
+    }
+  }
+
+  if (MapConverter::map.getResulution() <= 0)
+    return;
   // get number of cells in grid
-  int xSize = (minMax[1] - minMax[0]) / MapConverter::map.getResulution();
-  int ySize = (minMax[3] - minMax[2]) / MapConverter::map.getResulution();
+  int xSize = static_cast<int>(
+                  std::ceil((minMax[1] - minMax[0]) /
+                            MapConverter::map.getResulution())) +
+              1;
+  int ySize = static_cast<int>(
+                  std::ceil((minMax[3] - minMax[2]) /
+                            MapConverter::map.getResulution())) +
+              1;
+  if (xSize <= 0 || ySize <= 0)
+    return;
+  if (xSize > 100000 || ySize > 100000) {
+    // Prevent segfaults from huge allocation due to NaN/invalid values
+    fprintf(stderr, "ERROR: Unreasonably large map size: %d x %d\n", xSize, ySize);
+    return;
+  }
   // creat local maps
   HeightRangeMap hMap(xSize, ySize);
+
+  // Initialize all posMap entries to prevent uninitialized data access
+  for (int x = 0; x < xSize; x++) {
+    for (int y = 0; y < ySize; y++) {
+      hMap.posMap[x][y].x = x * resolution + minMax[0];
+      hMap.posMap[x][y].y = y * resolution + minMax[2];
+    }
+  }
   for (voxel v : vMap) {
     // as voxels can be larger then a map cell, this loop goes through all cell
     // voxel occupies
-    int sizeIndex = v.halfSize * 2.1 / MapConverter::map.getResulution();
+    int sizeIndex = std::max(
+        1, static_cast<int>(
+               std::ceil((v.halfSize * 2.0) /
+                         MapConverter::map.getResulution())));
     for (int x = 0; x < sizeIndex; x++) {
       for (int y = 0; y < sizeIndex; y++) {
-        int posX = (v.position.x - v.halfSize + resolution * x - minMax[0]) /
-                   resolution;
-        int posY = (v.position.y - v.halfSize + resolution * y - minMax[2]) /
-                   resolution;
+        int posX = static_cast<int>(std::floor(
+            (v.position.x - v.halfSize + resolution * x - minMax[0]) /
+            resolution));
+        int posY = static_cast<int>(std::floor(
+            (v.position.y - v.halfSize + resolution * y - minMax[2]) /
+            resolution));
         if (posX < 0 || posX >= xSize)
           continue; // if cell is outside local map grid
         if (posY < 0 || posY >= ySize)
@@ -80,10 +121,15 @@ void MapConverter::updateMap(vector<voxel> vMap, vector<double> minMax) {
         continue;
 
       for (auto d : DIRECTIONS) {
-        if (hMap.free[x + d.x][y + d.y].size() != 0)
+        int nx = x + d.x;
+        int ny = y + d.y;
+        // Bounds check before accessing neighbors
+        if (nx < 0 || nx >= xSize || ny < 0 || ny >= ySize)
           continue;
-        // map.set(hMap.posMap[x + d.x][y + d.y].x, hMap.posMap[x][y].y, hMap.getOccupation(x + d.x, y + d.y, -1, minOcc));
-        map.set(hMap.posMap[x + d.x][y + d.y].x, hMap.posMap[x + d.x][y + d.y].y, hMap.getOccupation(x + d.x, y + d.y, -1, minOcc));
+        if (hMap.free[nx][ny].size() != 0)
+          continue;
+        map.set(hMap.posMap[nx][ny].x, hMap.posMap[nx][ny].y,
+                hMap.getOccupation(nx, ny, -1, minOcc));
       }
     }
   }

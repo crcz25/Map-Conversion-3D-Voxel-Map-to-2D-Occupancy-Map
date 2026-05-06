@@ -28,6 +28,11 @@ public:
   // they overlap
   void addRange(int x, int y, heightRange hr, bool isOccupied, double posX,
                 double posY) {
+    if (x < 0 || x >= static_cast<int>(free.size()))
+      return;
+    if (y < 0 || y >= static_cast<int>(free[x].size()))
+      return;
+
     point2D p = {posX, posY};
     posMap[x][y] = p;
     if (isOccupied)
@@ -53,7 +58,7 @@ public:
     for (auto d : DIRECTIONS) {
       if (x + d.x < 0 || x + d.x >= free.size())
         continue;
-      if (y + d.y < 0 || y + d.y >= free.back().size())
+      if (y + d.y < 0 || y + d.y >= free[x + d.x].size())
         continue;
       occupation =
           max(occupation, getOccupation(x, y, index, x + d.x, y + d.y, minOcc));
