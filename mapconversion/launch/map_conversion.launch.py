@@ -28,7 +28,7 @@ def generate_launch_description():
                 'subscriber_qos_reliable': True,
                 'subscriber_qos_transient_local': False,
                 'publisher_qos_reliable': True,
-                # Latched: inc_dude and navigation_server subscribe
+                # Latched: inc_dude and scene_graph_server subscribe
                 # transient_local, which a volatile publisher cannot serve.
                 'publisher_qos_transient_local': True,
             }],

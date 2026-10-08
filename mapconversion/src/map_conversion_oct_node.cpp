@@ -52,6 +52,12 @@ private:
   bool sub_qos_transient_local;
   bool pub_qos_reliable;
   bool pub_qos_transient_local;
+  // Which outputs exist besides /mapUAV. A disabled one has no publisher and
+  // is never computed.
+  bool publish_ugv_map;
+  bool publish_height_map;
+  bool publish_slope_map;
+  bool publish_visualization;
 
 public:
   MapToMap() : Node("map_conversion") {
@@ -69,6 +75,11 @@ public:
         this->declare_parameter("subscriber_qos_transient_local", false);
     pub_qos_transient_local =
         this->declare_parameter("publisher_qos_transient_local", false);
+    publish_ugv_map = this->declare_parameter("publish_ugv_map", true);
+    publish_height_map = this->declare_parameter("publish_height_map", true);
+    publish_slope_map = this->declare_parameter("publish_slope_map", true);
+    publish_visualization =
+        this->declare_parameter("publish_visualization", true);
 
     // QoS profiles
     rclcpp::QoS sub_qos_profile = rclcpp::QoS(rclcpp::KeepLast(5));
@@ -95,20 +106,25 @@ public:
     subOctMap = this->create_subscription<octomap_msgs::msg::Octomap>(
         "/octomap", sub_qos_profile,
         std::bind(&MapToMap::mapCallback, this, std::placeholders::_1));
-    pubMapUGV = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
-        "/mapUGV", pub_qos_profile);
     pubMapUAV = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
         "/mapUAV", pub_qos_profile);
-    pubMapFloor = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
-        "/visualization_floor_map", 5);
-    pubMapCeiling = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
-        "/visualization_ceiling_map", 5);
-    pubHeightMap = this->create_publisher<mapconversion_msgs::msg::HeightMap>(
-        "/heightMap", pub_qos_profile);
-    pubMapSlopeVis = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
-        "/visualization_slope_map", 5);
-    pubMapSlope = this->create_publisher<mapconversion_msgs::msg::SlopeMap>(
-        "/slopeMap", pub_qos_profile);
+    if (publish_ugv_map)
+      pubMapUGV = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
+          "/mapUGV", pub_qos_profile);
+    if (publish_height_map)
+      pubHeightMap = this->create_publisher<mapconversion_msgs::msg::HeightMap>(
+          "/heightMap", pub_qos_profile);
+    if (publish_slope_map)
+      pubMapSlope = this->create_publisher<mapconversion_msgs::msg::SlopeMap>(
+          "/slopeMap", pub_qos_profile);
+    if (publish_visualization) {
+      pubMapFloor = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
+          "/visualization_floor_map", 5);
+      pubMapCeiling = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
+          "/visualization_ceiling_map", 5);
+      pubMapSlopeVis = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
+          "/visualization_slope_map", 5);
+    }
     OcMap = NULL;
     MC = NULL;
   }
@@ -256,7 +272,8 @@ public:
     slopeMsg.slope.resize(mapMsg.info.width * mapMsg.info.height);
 
     // pub map for UGV
-    if (pubMapUGV->get_subscription_count() != 0 || pub_qos_transient_local) {
+    if (pubMapUGV &&
+        (pubMapUGV->get_subscription_count() != 0 || pub_qos_transient_local)) {
       if (isinf(slopeMax)) {
         RCLCPP_WARN(
             this->get_logger(),
@@ -289,7 +306,7 @@ public:
     }
 
     // pub rviz visualization for floor heigth map
-    if (pubMapFloor->get_subscription_count() != 0) {
+    if (pubMapFloor && pubMapFloor->get_subscription_count() != 0) {
       if (MC->map.sizeY() == 0 || MC->map.sizeX() == 0)
         return;
       double vMax = NAN, vMin = NAN;
@@ -326,7 +343,7 @@ public:
       pubMapFloor->publish(mapMsg);
     }
     // pub rviz visualization for cieling heigth map
-    if (pubMapCeiling->get_subscription_count() != 0) {
+    if (pubMapCeiling && pubMapCeiling->get_subscription_count() != 0) {
       if (MC->map.sizeY() == 0 || MC->map.sizeX() == 0)
         return;
       double vMax = NAN, vMin = NAN;
@@ -364,8 +381,8 @@ public:
     }
 
     // pub height map
-    if (pubHeightMap->get_subscription_count() != 0 ||
-        pub_qos_transient_local) {
+    if (pubHeightMap && (pubHeightMap->get_subscription_count() != 0 ||
+                         pub_qos_transient_local)) {
       for (int y = 0; y < MC->map.sizeY(); y++) {
         for (int x = 0; x < MC->map.sizeX(); x++) {
           int index = x + y * MC->map.sizeX();
@@ -378,7 +395,7 @@ public:
     }
 
     // pub rviz visualization fro slope map
-    if (pubMapSlopeVis->get_subscription_count() != 0) {
+    if (pubMapSlopeVis && pubMapSlopeVis->get_subscription_count() != 0) {
       double vMax = slopeMax * 2, vMin = 0;
 
       for (int y = 0; y < MC->map.sizeY(); y++) {
@@ -397,7 +414,8 @@ public:
     }
 
     // pub slope map
-    if (pubMapSlope->get_subscription_count() != 0 || pub_qos_transient_local) {
+    if (pubMapSlope && (pubMapSlope->get_subscription_count() != 0 ||
+                        pub_qos_transient_local)) {
       for (int y = 0; y < MC->map.sizeY(); y++) {
         for (int x = 0; x < MC->map.sizeX(); x++) {
           int index = x + y * MC->map.sizeX();

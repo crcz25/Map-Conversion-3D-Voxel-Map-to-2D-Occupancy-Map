@@ -84,6 +84,10 @@ By default, the node uses the QoS policy of `Reliable` for reliability and `Vola
 
 `publisher_qos_transient_local` (default: `false`): Controls the durability policy for the published topics: `mapUGV`, `mapUAV`, `heightMap`, and `slopeMap`. When set to `true`, the durability policy is `Transient Local`, and topics will publish messages even without active subscribers. When set to `false`, the durability policy is `Volatile`, and topics will publish messages only when subscribers are connected.
 
+`publish_ugv_map`, `publish_height_map`, `publish_slope_map` (default: `true`): Whether `mapUGV`, `heightMap` and `slopeMap` are published at all. When `false`, the topic does not exist and is never computed, whatever `publisher_qos_transient_local` says (with it, an enabled output is computed and published on every update, subscribed or not). `mapUAV` is always published.
+
+`publish_visualization` (default: `true`): Whether the RViz cost maps `visualization_floor_map`, `visualization_ceiling_map` and `visualization_slope_map` exist. Each is computed only while it has a subscriber.
+
 #### Subscribed Topics 
 
 `octomap`: Input voxel map. 
