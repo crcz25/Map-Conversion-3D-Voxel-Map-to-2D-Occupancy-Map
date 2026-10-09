@@ -2,8 +2,8 @@
 // in src/path_converter_node.cpp, next to main(), with no header, so this
 // test compiles that file with main() renamed. The source is unchanged.
 //
-// DISABLED_M29_* reproduces audit M-29: it asserts the correct behaviour and
-// fails on the current code (run with --gtest_also_run_disabled_tests).
+// M29_* guards the fix of audit M-29 (an x outside the row wrapped into the
+// next row).
 
 #include <gtest/gtest.h>
 
@@ -59,9 +59,9 @@ TEST_F(PathConverterHeights, CellsPastTheFirstOrLastEntryAreUnknown) {
   EXPECT_TRUE(std::isnan(node_->getHeightTop(3, 1)));
 }
 
-// M-29: only the flat index is checked, so an x outside [0, width) wraps into
-// the neighbouring row and reads another cell's height.
-TEST_F(PathConverterHeights, DISABLED_M29_OutOfRangeXIsUnknown) {
+// M-29: only the flat index was checked, so an x outside [0, width) wrapped
+// into the neighbouring row and read another cell's height.
+TEST_F(PathConverterHeights, M29_OutOfRangeXIsUnknown) {
   EXPECT_TRUE(std::isnan(node_->getHeight(3, 0)));      // reads (0, 1)
   EXPECT_TRUE(std::isnan(node_->getHeight(-1, 1)));     // reads (2, 0)
   EXPECT_TRUE(std::isnan(node_->getHeightTop(3, 0)));   // reads (0, 1)

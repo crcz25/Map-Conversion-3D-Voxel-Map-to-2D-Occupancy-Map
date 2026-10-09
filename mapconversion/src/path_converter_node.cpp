@@ -219,6 +219,10 @@ public:
   }
 
   double getHeight(int x, int y) {
+    // x and y separately: an x outside the row would wrap into the next one.
+    if (x < 0 || x >= static_cast<int64_t>(hMap.info.width) || y < 0 ||
+        y >= static_cast<int64_t>(hMap.info.height))
+      return NAN;
     int index = x + y * hMap.info.width;
     if (index < 0 || index >= hMap.bottom.size())
       return NAN;
@@ -227,6 +231,10 @@ public:
   }
 
   double getHeightTop(int x, int y) {
+    // x and y separately: an x outside the row would wrap into the next one.
+    if (x < 0 || x >= static_cast<int64_t>(hMap.info.width) || y < 0 ||
+        y >= static_cast<int64_t>(hMap.info.height))
+      return NAN;
     int index = x + y * hMap.info.width;
     if (index < 0 || index >= hMap.top.size())
       return NAN;
