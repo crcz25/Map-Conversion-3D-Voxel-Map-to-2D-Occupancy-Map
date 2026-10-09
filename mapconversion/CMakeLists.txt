@@ -75,12 +75,33 @@ install(DIRECTORY launch/
 )
 
 if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  # Map2D is header-only; MapConverter is the map_conversion_class library.
+  ament_add_gtest(test_map2d test/test_map2d.cpp)
+  ament_target_dependencies(test_map2d Eigen3)
+  ament_add_gtest(test_map_converter test/test_map_converter.cpp)
+  target_link_libraries(test_map_converter map_conversion_class)
+  ament_target_dependencies(test_map_converter Eigen3)
+  # PathConverter: test/test_path_converter_node.cpp compiles
+  # src/path_converter_node.cpp with main() renamed. Creates a node, so it
+  # gets its own ROS_DOMAIN_ID.
+  find_package(ament_cmake_ros REQUIRED)
+  ament_add_ros_isolated_gtest(test_path_converter_node
+    test/test_path_converter_node.cpp TIMEOUT 120)
+  ament_target_dependencies(test_path_converter_node
+    rclcpp
+    std_msgs
+    nav_msgs
+    geometry_msgs
+    mapconversion_msgs
+  )
+
   # Static analysis, opt-in with -DENABLE_LINT=ON (tools/ci/run_ci.sh): the
   # default colcon test runs no lint test.
   option(ENABLE_LINT "Add the cppcheck and clang-tidy tests" OFF)
   if(ENABLE_LINT)
     find_package(ament_cmake_cppcheck REQUIRED)
-    ament_cppcheck(include src
+    ament_cppcheck(include src test
       LANGUAGE c++ INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include)
     # ament_cppcheck otherwise skips cppcheck 1.88 and 2.x as too slow.
     set_tests_properties(cppcheck PROPERTIES

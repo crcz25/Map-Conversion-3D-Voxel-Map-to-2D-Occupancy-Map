@@ -1,0 +1,122 @@
+// Map2D: the tiled, growing 2D map behind /mapUAV, the height maps and the
+// slope map. Characterization of today's behaviour, and the H-06
+// reproduction (DISABLED_H06_*: asserts the correct behaviour, fails on the
+// current code; run with --gtest_also_run_disabled_tests).
+//
+// Map2D allocates its tiles with new[] and never frees them (audit M-30), so
+// these tests leak under LeakSanitizer.
+
+#include <gtest/gtest.h>
+
+#include <cmath>
+
+#include "Map2D.hh"
+
+namespace {
+
+TEST(Map2D, NewMapIsEmptyAndReadsUnknown) {
+  Map2D m(1.0);
+  EXPECT_EQ(m.sizeX(), 0);
+  EXPECT_EQ(m.sizeY(), 0);
+  EXPECT_DOUBLE_EQ(m.offsetX(), 0.0);
+  EXPECT_DOUBLE_EQ(m.offsetY(), 0.0);
+  EXPECT_DOUBLE_EQ(m.getResulution(), 1.0);
+  EXPECT_EQ(m.get(0, 0), -1);
+  EXPECT_TRUE(std::isnan(m.getHeight(0, 0)));
+  EXPECT_TRUE(m.get().empty());
+}
+
+TEST(Map2D, SetByIndexGrowsTheMapAndOtherCellsStayUnknown) {
+  Map2D m(1.0);
+  m.set(2, 3, 7);
+  EXPECT_EQ(m.sizeX(), 3);
+  EXPECT_EQ(m.sizeY(), 4);
+  EXPECT_EQ(m.get(2, 3), 7);
+  EXPECT_EQ(m.get(0, 0), -1);
+  EXPECT_EQ(m.get(1, 3), -1);
+  // Outside the map.
+  EXPECT_EQ(m.get(3, 3), -1);
+  EXPECT_EQ(m.get(-1, 0), -1);
+  EXPECT_TRUE(std::isnan(m.getHeight(2, 3)));
+  EXPECT_TRUE(std::isnan(m.getSlope(2, 3)));
+}
+
+TEST(Map2D, GetAllIsRowMajorFromTheOrigin) {
+  Map2D m(1.0);
+  m.set(0, 0, 1);
+  m.set(1, 0, 2);
+  m.set(0, 1, 3);
+  m.set(1, 1, 4);
+  EXPECT_EQ(m.get(), (std::vector<int>{1, 2, 3, 4}));
+}
+
+TEST(Map2D, WorldCoordinatesUseResolutionAndOffset) {
+  Map2D m(0.5, -1.0, -2.0);
+  m.set(0.0, 0.0, 4);  // index ((0 - -1) / 0.5, (0 - -2) / 0.5) = (2, 4)
+  EXPECT_EQ(m.get(2, 4), 4);
+  EXPECT_EQ(m.get(0.0, 0.0), 4);
+  m.setHeight(0.0, 0.0, 1.25);
+  m.setHeightTop(0.0, 0.0, 3.5);
+  EXPECT_DOUBLE_EQ(m.getHeight(2, 4), 1.25);
+  EXPECT_DOUBLE_EQ(m.getHeightTop(2, 4), 3.5);
+  EXPECT_DOUBLE_EQ(m.offsetX(), -1.0);
+  EXPECT_DOUBLE_EQ(m.offsetY(), -2.0);
+}
+
+TEST(Map2D, GrowthTowardPositiveCoordinatesKeepsEveryCell) {
+  Map2D m(1.0);
+  m.set(1, 0, 9);
+  m.set(0, 1, 8);
+  // Past the first 128 x 128 tile in x and in y.
+  m.set(200, 0, 5);
+  m.set(0, 300, 6);
+  EXPECT_EQ(m.sizeX(), 201);
+  EXPECT_EQ(m.sizeY(), 301);
+  EXPECT_DOUBLE_EQ(m.offsetX(), 0.0);
+  EXPECT_DOUBLE_EQ(m.offsetY(), 0.0);
+  EXPECT_EQ(m.get(1, 0), 9);
+  EXPECT_EQ(m.get(0, 1), 8);
+  EXPECT_EQ(m.get(200, 0), 5);
+  EXPECT_EQ(m.get(0, 300), 6);
+  EXPECT_EQ(m.get(100, 100), -1);
+}
+
+TEST(Map2D, GrowthTowardNegativeCoordinatesMovesTheOffset) {
+  Map2D m(1.0);
+  m.set(0.0, 0.0, 7);
+  m.set(-1.0, 0.0, 5);
+  EXPECT_EQ(m.sizeX(), 2);
+  EXPECT_DOUBLE_EQ(m.offsetX(), -1.0);
+  EXPECT_DOUBLE_EQ(m.offsetY(), 0.0);
+}
+
+// H-06: growing toward negative coordinates adds SUBMAP_SIZE + 1 to the
+// tile offset instead of SUBMAP_SIZE, so every cell moves one index: world
+// x = -1 then reads the value written at x = 0. Traced by hand in the audit.
+TEST(Map2D, DISABLED_H06_GrowthTowardNegativeKeepsCellsAtTheirPosition) {
+  Map2D m(1.0);
+  m.set(0.0, 0.0, 7);
+  m.set(-1.0, 0.0, 5);
+  EXPECT_EQ(m.get(0.0, 0.0), 7);
+  EXPECT_EQ(m.get(-1.0, 0.0), 5);
+}
+
+TEST(Map2D, UpdateSlopeFitsAPlaneThroughTheHeights) {
+  Map2D m(1.0);
+  // Floor rising 0.5 per cell in x, flat in y.
+  for (int x = 0; x < 5; ++x) {
+    for (int y = 0; y < 5; ++y) {
+      m.setHeight(x, y, 0.5 * x);
+    }
+  }
+  m.updateSlope(1, 0, 5, 0, 5);
+  EXPECT_NEAR(m.getSlope(2, 2), 0.5, 1e-9);
+  // The border is not updated.
+  EXPECT_TRUE(std::isnan(m.getSlope(0, 2)));
+  // Above the threshold the slope-filtered map reports an obstacle.
+  m.set(2, 2, 0);
+  EXPECT_EQ(m.get(2, 2, 0.4), 100);
+  EXPECT_EQ(m.get(2, 2, 0.6), 0);
+}
+
+}  // namespace
