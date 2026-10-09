@@ -314,7 +314,7 @@ public:
       for (int y = 0; y < MC->map.sizeY(); y++) {
         for (int x = 0; x < MC->map.sizeX(); x++) {
           double v = MC->map.getHeight(x, y);
-          if (isnan(v))
+          if (!isfinite(v))
             continue;
           if (isnan(vMax))
             vMax = v;
@@ -331,10 +331,13 @@ public:
         for (int x = 0; x < MC->map.sizeX(); x++) {
           int index = x + y * MC->map.sizeX();
           double value = MC->map.getHeight(x, y);
-          if (!isnan(value)) {
-            value = (value - vMin) / (vMax - vMin) * 199;
+          if (isfinite(value)) {
+            // A map of one height has no range: the bottom of the colours.
+            value = vMax > vMin ? (value - vMin) / (vMax - vMin) * 199 : 0.0;
             if (value > 99)
               value -= 199; // To get the full color range in the rviz cost map
+          } else {
+            value = -1; // unknown: not representable in an int8 cell
           }
           mapMsg.data[index] = value;
         }
@@ -351,7 +354,7 @@ public:
       for (int y = 0; y < MC->map.sizeY(); y++) {
         for (int x = 0; x < MC->map.sizeX(); x++) {
           double v = MC->map.getHeightTop(x, y);
-          if (isnan(v))
+          if (!isfinite(v))
             continue;
           if (isnan(vMax))
             vMax = v;
@@ -368,10 +371,13 @@ public:
         for (int x = 0; x < MC->map.sizeX(); x++) {
           int index = x + y * MC->map.sizeX();
           double value = MC->map.getHeightTop(x, y);
-          if (!isnan(value)) {
-            value = (value - vMin) / (vMax - vMin) * 199;
+          if (isfinite(value)) {
+            // A map of one height has no range: the bottom of the colours.
+            value = vMax > vMin ? (value - vMin) / (vMax - vMin) * 199 : 0.0;
             if (value > 99)
               value -= 199; // To get the full color range in the rviz cost map
+          } else {
+            value = -1; // unknown: not representable in an int8 cell
           }
           mapMsg.data[index] = value;
         }
@@ -402,10 +408,13 @@ public:
         for (int x = 0; x < MC->map.sizeX(); x++) {
           int index = x + y * MC->map.sizeX();
           double value = min(MC->map.getSlope(x, y), slopeMax * 2);
-          if (!isnan(value)) {
-            value = (value - vMin) / (vMax - vMin) * 198 + 1;
+          if (isfinite(value)) {
+            // max_slope_ugv = 0 leaves no range: the bottom of the colours.
+            value = vMax > vMin ? (value - vMin) / (vMax - vMin) * 198 + 1 : 1.0;
             if (value > 99)
               value -= 199; // soooo basically, rviz costmap are weird...
+          } else {
+            value = -1; // unknown: not representable in an int8 cell
           }
           mapMsg.data[index] = value;
         }

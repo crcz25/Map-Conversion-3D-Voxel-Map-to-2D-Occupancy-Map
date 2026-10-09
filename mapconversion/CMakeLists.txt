@@ -96,6 +96,29 @@ if(BUILD_TESTING)
     mapconversion_msgs
   )
 
+  # MapToMap: test/test_map_conversion_oct_node.cpp compiles
+  # src/map_conversion_oct_node.cpp with main() renamed. The float checks
+  # make a NaN or out-of-range cast to int8 and a division by zero fatal.
+  ament_add_ros_isolated_gtest(test_map_conversion_oct_node
+    test/test_map_conversion_oct_node.cpp TIMEOUT 120)
+  target_link_libraries(test_map_conversion_oct_node map_conversion_class
+    ${OCTOMAP_LIBRARIES})
+  ament_target_dependencies(test_map_conversion_oct_node
+    rclcpp
+    std_msgs
+    nav_msgs
+    geometry_msgs
+    mapconversion_msgs
+    octomap_ros
+    octomap
+    octomap_msgs
+  )
+  set(_float_checks float-divide-by-zero,float-cast-overflow)
+  target_compile_options(test_map_conversion_oct_node PRIVATE
+    -fsanitize=${_float_checks} -fno-sanitize-recover=${_float_checks})
+  target_link_options(test_map_conversion_oct_node PRIVATE
+    -fsanitize=${_float_checks})
+
   # Static analysis, opt-in with -DENABLE_LINT=ON (tools/ci/run_ci.sh): the
   # default colcon test runs no lint test.
   option(ENABLE_LINT "Add the cppcheck and clang-tidy tests" OFF)
