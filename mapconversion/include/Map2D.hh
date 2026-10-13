@@ -367,15 +367,15 @@ private:
       growY = subIndexY;
     }
     if (growX != 0 || growY != 0) {
+      // Growth toward negative coordinates moves the tiles, and the tile
+      // offset by the same number of cells: shift x and y with it (H-06).
+      const int oldOffsetX = subMapOffsetX;
+      const int oldOffsetY = subMapOffsetY;
       growSubMaps(growX, growY);
-      if (subIndexX < 0) {
-        x = subMapOffsetX - 1;
-        subIndexX = x / SUBMAP_SIZE;
-      }
-      if (subIndexY < 0) {
-        y = subMapOffsetY - 1;
-        subIndexY = y / SUBMAP_SIZE;
-      }
+      x += subMapOffsetX - oldOffsetX;
+      y += subMapOffsetY - oldOffsetY;
+      subIndexX = x / SUBMAP_SIZE;
+      subIndexY = y / SUBMAP_SIZE;
     }
     indexX = x % SUBMAP_SIZE;
     indexY = y % SUBMAP_SIZE;
@@ -418,8 +418,8 @@ private:
         newSubMapSlope[x + offsetIndexX][y + offsetIndexY] = subMapSlope[x][y];
       }
     }
-    subMapOffsetX += offsetIndexX * (SUBMAP_SIZE + 1);
-    subMapOffsetY += offsetIndexY * (SUBMAP_SIZE + 1);
+    subMapOffsetX += offsetIndexX * SUBMAP_SIZE;
+    subMapOffsetY += offsetIndexY * SUBMAP_SIZE;
     subMap = newSubMap;
     subMapHeight = newSubMapHeight;
     subMapHeightTop = newSubMapHeightTop;

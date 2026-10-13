@@ -1,7 +1,6 @@
 // Map2D: the tiled, growing 2D map behind /mapUAV, the height maps and the
-// slope map. Characterization of today's behaviour, and the H-06
-// reproduction (DISABLED_H06_*: asserts the correct behaviour, fails on the
-// current code; run with --gtest_also_run_disabled_tests).
+// slope map. Characterization of today's behaviour, and the H-06 tests
+// (growth toward negative coordinates).
 //
 // Map2D allocates its tiles with new[] and never frees them (audit M-30), so
 // these tests leak under LeakSanitizer.
@@ -9,6 +8,8 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <utility>
+#include <vector>
 
 #include "Map2D.hh"
 
@@ -90,15 +91,70 @@ TEST(Map2D, GrowthTowardNegativeCoordinatesMovesTheOffset) {
   EXPECT_DOUBLE_EQ(m.offsetY(), 0.0);
 }
 
-// H-06: growing toward negative coordinates adds SUBMAP_SIZE + 1 to the
-// tile offset instead of SUBMAP_SIZE, so every cell moves one index: world
-// x = -1 then reads the value written at x = 0. Traced by hand in the audit.
-TEST(Map2D, DISABLED_H06_GrowthTowardNegativeKeepsCellsAtTheirPosition) {
+// H-06: growing toward negative coordinates added SUBMAP_SIZE + 1 to the
+// tile offset instead of SUBMAP_SIZE, so every cell moved one index: world
+// x = -1 then read the value written at x = 0.
+TEST(Map2D, H06_GrowthTowardNegativeKeepsCellsAtTheirPosition) {
   Map2D m(1.0);
   m.set(0.0, 0.0, 7);
   m.set(-1.0, 0.0, 5);
   EXPECT_EQ(m.get(0.0, 0.0), 7);
   EXPECT_EQ(m.get(-1.0, 0.0), 5);
+}
+
+// H-06: grow toward -x, then -y, then both, each time by more than one
+// tile (SUBMAP_SIZE = 128 cells). After every growth each cell written so
+// far keeps its value and height at its world position, and its index
+// counted from the map origin (info.origin = offsetX(), offsetY()) is
+// (world - origin) / resolution.
+TEST(Map2D, H06_RepeatedNegativeGrowthKeepsEveryCell) {
+  struct Cell {
+    double x, y;
+    int value;
+  };
+  Map2D m(1.0);
+  std::vector<Cell> cells;
+  const auto write = [&](double x, double y) {
+    const int value = static_cast<int>(cells.size()) % 100 + 1;
+    m.set(x, y, value);
+    m.setHeight(x, y, 0.5 * value);
+    cells.push_back({x, y, value});
+  };
+  const auto check = [&](const char *step) {
+    for (const Cell &c : cells) {
+      EXPECT_EQ(m.get(c.x, c.y), c.value) << step << ": " << c.x << "," << c.y;
+      const int ix = static_cast<int>(c.x - m.offsetX());
+      const int iy = static_cast<int>(c.y - m.offsetY());
+      EXPECT_EQ(m.get(ix, iy), c.value) << step << ": " << c.x << "," << c.y;
+      EXPECT_DOUBLE_EQ(m.getHeight(ix, iy), 0.5 * c.value)
+          << step << ": " << c.x << "," << c.y;
+    }
+  };
+  write(0, 0);
+  write(5, 3);
+  write(200, 140);  // growth toward +x and +y
+  check("positive");
+  for (const auto &[x, y] : std::vector<std::pair<double, double>>{
+           {-1, 0}, {-130, 2}, {-400, 1}}) {
+    write(x, y);
+    check("negative x");
+  }
+  EXPECT_DOUBLE_EQ(m.offsetX(), -400.0);
+  for (const auto &[x, y] : std::vector<std::pair<double, double>>{
+           {3, -1}, {-2, -129}, {7, -300}}) {
+    write(x, y);
+    check("negative y");
+  }
+  EXPECT_DOUBLE_EQ(m.offsetY(), -300.0);
+  for (const auto &[x, y] : std::vector<std::pair<double, double>>{
+           {-401, -301}, {-700, -650}, {-701, -651}}) {
+    write(x, y);
+    check("negative x and y");
+  }
+  EXPECT_DOUBLE_EQ(m.offsetX(), -701.0);
+  EXPECT_DOUBLE_EQ(m.offsetY(), -651.0);
+  EXPECT_EQ(m.sizeX(), 200 + 701 + 1);
+  EXPECT_EQ(m.sizeY(), 140 + 651 + 1);
 }
 
 TEST(Map2D, UpdateSlopeFitsAPlaneThroughTheHeights) {
