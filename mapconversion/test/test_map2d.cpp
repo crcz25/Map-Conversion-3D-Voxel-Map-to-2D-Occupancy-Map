@@ -2,12 +2,13 @@
 // slope map. Characterization of today's behaviour, and the H-06 tests
 // (growth toward negative coordinates).
 //
-// Map2D allocates its tiles with new[] and never frees them (audit M-30), so
-// these tests leak under LeakSanitizer.
+// M-30: the tiles are std::vector cells owned by the map; these tests leave
+// no leak under LeakSanitizer.
 
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -155,6 +156,45 @@ TEST(Map2D, H06_RepeatedNegativeGrowthKeepsEveryCell) {
   EXPECT_DOUBLE_EQ(m.offsetY(), -651.0);
   EXPECT_EQ(m.sizeX(), 200 + 701 + 1);
   EXPECT_EQ(m.sizeY(), 140 + 651 + 1);
+}
+
+// M-30: a copy would duplicate every tile; no code needs one, so Map2D is
+// move-only.
+static_assert(!std::is_copy_constructible_v<Map2D>, "Map2D is not copyable");
+static_assert(!std::is_copy_assignable_v<Map2D>, "Map2D is not copyable");
+static_assert(std::is_move_constructible_v<Map2D>, "Map2D is movable");
+static_assert(std::is_move_assignable_v<Map2D>, "Map2D is movable");
+
+TEST(Map2D, M30_AMovedMapKeepsEveryCell) {
+  Map2D m(1.0);
+  m.set(-200.0, 3.0, 7);
+  m.setHeight(-200.0, 3.0, 1.5);
+  m.set(150.0, -140.0, 9);
+  Map2D moved(std::move(m));
+  EXPECT_EQ(moved.get(-200.0, 3.0), 7);
+  EXPECT_EQ(moved.get(150.0, -140.0), 9);
+  EXPECT_DOUBLE_EQ(moved.getHeight(0, static_cast<int>(3.0 - moved.offsetY())), 1.5);
+  Map2D assigned(1.0);
+  assigned = std::move(moved);
+  EXPECT_EQ(assigned.get(150.0, -140.0), 9);
+}
+
+// M-30: a map grown in every direction over many tiles, then destroyed; in
+// the sanitizer build LeakSanitizer reports nothing for it.
+TEST(Map2D, M30_AGrownMapReleasesItsTiles) {
+  {
+    Map2D m(1.0);
+    for (int k = 0; k < 6; ++k) {
+      const double far = 130.0 * (k + 1);
+      m.set(far, far, k);
+      m.set(-far, -far, k);
+      m.setHeight(far, -far, 0.5);
+      m.setHeightTop(-far, far, 2.0);
+      m.setSlope(0.0, far, 0.1);
+    }
+    EXPECT_EQ(m.get(780.0, 780.0), 5);
+    EXPECT_EQ(m.get(-780.0, -780.0), 5);
+  }
 }
 
 TEST(Map2D, UpdateSlopeFitsAPlaneThroughTheHeights) {

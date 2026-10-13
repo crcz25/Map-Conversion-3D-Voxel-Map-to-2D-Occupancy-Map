@@ -8,11 +8,8 @@ MapConverter::MapConverter(double resolution, int slopeEstimationSize,
   MapConverter::slopeEstimationSize = slopeEstimationSize;
   MapConverter::minOcc = minimumOccupancy;
   MapConverter::minZ = minimumZ;
-  Map2D m(resolution);
-  MapConverter::map = m;
+  MapConverter::map = Map2D(resolution);  // M-30: moved, Map2D is not copyable
 }
-
-MapConverter::~MapConverter() {}
 
 void MapConverter::updateMap(vector<voxel> vMap, vector<double> minMax) {
   if (vMap.size() == 0)

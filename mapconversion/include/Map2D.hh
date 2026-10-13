@@ -1,5 +1,7 @@
 #pragma once
 #include "datatypes.hh"
+
+#include <utility>
 const int SUBMAP_SIZE = 128;
 
 class Map2D {
@@ -32,6 +34,13 @@ public:
     MatrixXd At = A.transpose();
     preCalcA = AtA_inv * At;
   }
+
+  // M-30: no code copies a Map2D (a copy would duplicate every tile); it is
+  // moved instead.
+  Map2D(const Map2D &) = delete;
+  Map2D &operator=(const Map2D &) = delete;
+  Map2D(Map2D &&) = default;
+  Map2D &operator=(Map2D &&) = default;
 
   // get all occupancy data
   vector<int> get() {
@@ -76,11 +85,11 @@ public:
     y += subMapOffsetY;
     int subIndexX = x / SUBMAP_SIZE;
     int subIndexY = y / SUBMAP_SIZE;
-    if (subMap[subIndexX][subIndexY] == nullptr)
+    if (subMap[subIndexX][subIndexY].empty())
       return -1;
     int indexX = x % SUBMAP_SIZE;
     int indexY = y % SUBMAP_SIZE;
-    return subMap[subIndexX][subIndexY][indexX][indexY];
+    return subMap[subIndexX][subIndexY][cell(indexX, indexY)];
   }
   // get occupancy data at x y filtered through slope threshold
   int get(int x, int y, double maxSlope) {
@@ -109,11 +118,11 @@ public:
     y += subMapOffsetY;
     int subIndexX = x / SUBMAP_SIZE;
     int subIndexY = y / SUBMAP_SIZE;
-    if (subMapHeight[subIndexX][subIndexY] == nullptr)
+    if (subMapHeight[subIndexX][subIndexY].empty())
       return NAN;
     int indexX = x % SUBMAP_SIZE;
     int indexY = y % SUBMAP_SIZE;
-    return subMapHeight[subIndexX][subIndexY][indexX][indexY];
+    return subMapHeight[subIndexX][subIndexY][cell(indexX, indexY)];
   }
 
   // get all ceiling data
@@ -136,11 +145,11 @@ public:
     y += subMapOffsetY;
     int subIndexX = x / SUBMAP_SIZE;
     int subIndexY = y / SUBMAP_SIZE;
-    if (subMapHeightTop[subIndexX][subIndexY] == nullptr)
+    if (subMapHeightTop[subIndexX][subIndexY].empty())
       return NAN;
     int indexX = x % SUBMAP_SIZE;
     int indexY = y % SUBMAP_SIZE;
-    return subMapHeightTop[subIndexX][subIndexY][indexX][indexY];
+    return subMapHeightTop[subIndexX][subIndexY][cell(indexX, indexY)];
   }
 
   // get all slope data
@@ -163,11 +172,11 @@ public:
     y += subMapOffsetY;
     int subIndexX = x / SUBMAP_SIZE;
     int subIndexY = y / SUBMAP_SIZE;
-    if (subMapSlope[subIndexX][subIndexY] == nullptr)
+    if (subMapSlope[subIndexX][subIndexY].empty())
       return NAN;
     int indexX = x % SUBMAP_SIZE;
     int indexY = y % SUBMAP_SIZE;
-    return subMapSlope[subIndexX][subIndexY][indexX][indexY];
+    return subMapSlope[subIndexX][subIndexY][cell(indexX, indexY)];
   }
 
   // get math width
@@ -193,9 +202,9 @@ public:
   void set(int x, int y, int value) {
     int subIndexX, subIndexY, indexX, indexY;
     getIndexSubMap(x, y, subIndexX, subIndexY, indexX, indexY);
-    if (subMap[subIndexX][subIndexY] == nullptr)
+    if (subMap[subIndexX][subIndexY].empty())
       subMap[subIndexX][subIndexY] = generateSubMapInt();
-    subMap[subIndexX][subIndexY][indexX][indexY] = value;
+    subMap[subIndexX][subIndexY][cell(indexX, indexY)] = value;
   }
 
   // set floor heigt value at the x y position
@@ -208,9 +217,9 @@ public:
   void setHeight(int x, int y, double value) {
     int subIndexX, subIndexY, indexX, indexY;
     getIndexSubMap(x, y, subIndexX, subIndexY, indexX, indexY);
-    if (subMapHeight[subIndexX][subIndexY] == nullptr)
+    if (subMapHeight[subIndexX][subIndexY].empty())
       subMapHeight[subIndexX][subIndexY] = generateSubMapDouble();
-    subMapHeight[subIndexX][subIndexY][indexX][indexY] = value;
+    subMapHeight[subIndexX][subIndexY][cell(indexX, indexY)] = value;
   }
 
   // set ceiling heigt value at the x y position
@@ -223,9 +232,9 @@ public:
   void setHeightTop(int x, int y, double value) {
     int subIndexX, subIndexY, indexX, indexY;
     getIndexSubMap(x, y, subIndexX, subIndexY, indexX, indexY);
-    if (subMapHeightTop[subIndexX][subIndexY] == nullptr)
+    if (subMapHeightTop[subIndexX][subIndexY].empty())
       subMapHeightTop[subIndexX][subIndexY] = generateSubMapDouble();
-    subMapHeightTop[subIndexX][subIndexY][indexX][indexY] = value;
+    subMapHeightTop[subIndexX][subIndexY][cell(indexX, indexY)] = value;
   }
 
   // set slope value at the x y position
@@ -238,9 +247,9 @@ public:
   void setSlope(int x, int y, double value) {
     int subIndexX, subIndexY, indexX, indexY;
     getIndexSubMap(x, y, subIndexX, subIndexY, indexX, indexY);
-    if (subMapSlope[subIndexX][subIndexY] == nullptr)
+    if (subMapSlope[subIndexX][subIndexY].empty())
       subMapSlope[subIndexX][subIndexY] = generateSubMapDouble();
-    subMapSlope[subIndexX][subIndexY][indexX][indexY] = value;
+    subMapSlope[subIndexX][subIndexY][cell(indexX, indexY)] = value;
   }
 
   void setOffset(double offsetX, double offsetY) {
@@ -280,10 +289,18 @@ public:
   }
 
 private:
-  vector<vector<int **>> subMap;
-  vector<vector<double **>> subMapHeight;
-  vector<vector<double **>> subMapHeightTop;
-  vector<vector<double **>> subMapSlope;
+  // M-30: a tile is SUBMAP_SIZE x SUBMAP_SIZE cells, row x then y
+  // (cell(x, y)); an empty tile is not allocated yet (reads as unknown).
+  using IntTile = vector<int>;
+  using DoubleTile = vector<double>;
+  static int cell(int indexX, int indexY) {
+    return indexX * SUBMAP_SIZE + indexY;
+  }
+
+  vector<vector<IntTile>> subMap;
+  vector<vector<DoubleTile>> subMapHeight;
+  vector<vector<DoubleTile>> subMapHeightTop;
+  vector<vector<DoubleTile>> subMapSlope;
   int subMapOffsetX;
   int subMapOffsetY;
   int mapSizeX, mapSizeY;
@@ -396,55 +413,43 @@ private:
       newSizeY = subMap[0].size() + abs(growY);
     }
     // generate new subMaps
-    vector<vector<int **>> newSubMap(newSizeX);
-    vector<vector<double **>> newSubMapHeight(newSizeX);
-    vector<vector<double **>> newSubMapHeightTop(newSizeX);
-    vector<vector<double **>> newSubMapSlope(newSizeX);
+    vector<vector<IntTile>> newSubMap(newSizeX);
+    vector<vector<DoubleTile>> newSubMapHeight(newSizeX);
+    vector<vector<DoubleTile>> newSubMapHeightTop(newSizeX);
+    vector<vector<DoubleTile>> newSubMapSlope(newSizeX);
     for (int i = 0; i < newSizeX; i++) {
-      newSubMap[i] = vector<int **>(newSizeY, nullptr);
-      newSubMapHeight[i] = vector<double **>(newSizeY, nullptr);
-      newSubMapHeightTop[i] = vector<double **>(newSizeY, nullptr);
-      newSubMapSlope[i] = vector<double **>(newSizeY, nullptr);
+      newSubMap[i] = vector<IntTile>(newSizeY);
+      newSubMapHeight[i] = vector<DoubleTile>(newSizeY);
+      newSubMapHeightTop[i] = vector<DoubleTile>(newSizeY);
+      newSubMapSlope[i] = vector<DoubleTile>(newSizeY);
     }
     int offsetIndexX = growX < 0 ? -growX : 0;
     int offsetIndexY = growY < 0 ? -growY : 0;
     for (int x = 0; x < subMap.size(); x++) {
       for (int y = 0; y < subMap[0].size(); y++) {
-        newSubMap[x + offsetIndexX][y + offsetIndexY] = subMap[x][y];
+        // Moves the tiles; the cells are not copied.
+        newSubMap[x + offsetIndexX][y + offsetIndexY] = std::move(subMap[x][y]);
         newSubMapHeight[x + offsetIndexX][y + offsetIndexY] =
-            subMapHeight[x][y];
+            std::move(subMapHeight[x][y]);
         newSubMapHeightTop[x + offsetIndexX][y + offsetIndexY] =
-            subMapHeightTop[x][y];
-        newSubMapSlope[x + offsetIndexX][y + offsetIndexY] = subMapSlope[x][y];
+            std::move(subMapHeightTop[x][y]);
+        newSubMapSlope[x + offsetIndexX][y + offsetIndexY] =
+            std::move(subMapSlope[x][y]);
       }
     }
     subMapOffsetX += offsetIndexX * SUBMAP_SIZE;
     subMapOffsetY += offsetIndexY * SUBMAP_SIZE;
-    subMap = newSubMap;
-    subMapHeight = newSubMapHeight;
-    subMapHeightTop = newSubMapHeightTop;
-    subMapSlope = newSubMapSlope;
+    subMap = std::move(newSubMap);
+    subMapHeight = std::move(newSubMapHeight);
+    subMapHeightTop = std::move(newSubMapHeightTop);
+    subMapSlope = std::move(newSubMapSlope);
   }
 
-  int **generateSubMapInt() {
-    int **map = new int *[SUBMAP_SIZE];
-    for (int x = 0; x < SUBMAP_SIZE; x++) {
-      map[x] = new int[SUBMAP_SIZE];
-      for (int y = 0; y < SUBMAP_SIZE; y++) {
-        map[x][y] = -1;
-      }
-    }
-    return map;
+  static IntTile generateSubMapInt() {
+    return IntTile(std::size_t{SUBMAP_SIZE} * SUBMAP_SIZE, -1);
   }
 
-  double **generateSubMapDouble() {
-    double **map = new double *[SUBMAP_SIZE];
-    for (int x = 0; x < SUBMAP_SIZE; x++) {
-      map[x] = new double[SUBMAP_SIZE];
-      for (int y = 0; y < SUBMAP_SIZE; y++) {
-        map[x][y] = NAN;
-      }
-    }
-    return map;
+  static DoubleTile generateSubMapDouble() {
+    return DoubleTile(std::size_t{SUBMAP_SIZE} * SUBMAP_SIZE, NAN);
   }
 };
