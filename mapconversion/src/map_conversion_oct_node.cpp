@@ -40,7 +40,7 @@ private:
   MapConverter *MC;
   octomap::OcTree *OcMap;
 
-  double resolution;
+  double resolution = 0.0;  // set from the first OctoMap
   double slopeMax;
   int slopeEstimationSize;
   double minimumZ;
@@ -60,7 +60,8 @@ private:
   bool publish_visualization;
 
 public:
-  MapToMap() : Node("map_conversion") {
+  explicit MapToMap(const rclcpp::NodeOptions &options = rclcpp::NodeOptions())
+      : Node("map_conversion", options) {
     slopeMax = this->declare_parameter("max_slope_ugv", INFINITY);
     slopeEstimationSize = this->declare_parameter("slope_estimation_size", 1);
     slopeEstimationSize = max(slopeEstimationSize, 2);
