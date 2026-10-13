@@ -19,6 +19,7 @@
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <octomap/AbstractOcTree.h>
+#include <octomap/ColorOcTree.h>
 #include <octomap/OcTree.h>
 #include <octomap/octomap.h>
 #include <octomap_msgs/conversions.h>
@@ -209,6 +210,67 @@ TEST_F(MapToMapHeaders, M28_MapFrameOverridesOnlyTheFrame) {
   options.parameter_overrides({{"map_frame", "override_frame"}});
   ASSERT_TRUE(convert(options)) << headers_.size() << " outputs";
   expectHeaders("override_frame");
+}
+
+// H-04 + N-3: the node owns its octree and its MapConverter. A full
+// replacement (partial_map_updates false, the code default) and a message
+// that is not an OcTree release the tree they replace or received; the node
+// keeps converting, with the same output. In the sanitizer build this test
+// alone shows no octree or MapConverter leak.
+class MapToMapOwnership : public ::testing::Test {
+protected:
+  static void SetUpTestSuite() { rclcpp::init(0, nullptr); }
+  static void TearDownTestSuite() { rclcpp::shutdown(); }
+
+  void SetUp() override {
+    node_ = std::make_shared<MapToMap>(rclcpp::NodeOptions());
+    listener_ = std::make_shared<rclcpp::Node>("ownership_listener");
+    sub_ = listener_->create_subscription<OccupancyGrid>(
+        "/mapUAV", 5, [this](OccupancyGrid::SharedPtr m) { last_ = std::move(m); });
+    executor_.add_node(listener_);
+    for (int i = 0; i < 500 && sub_->get_publisher_count() == 0; ++i) {
+      executor_.spin_some(std::chrono::milliseconds(10));
+    }
+  }
+
+  // The /mapUAV published for `msg`, or null when the node published none.
+  OccupancyGrid::SharedPtr convert(const octomap_msgs::msg::Octomap &msg) {
+    last_.reset();
+    node_->mapCallback(msg);
+    for (int i = 0; i < 100 && !last_; ++i) {
+      executor_.spin_once(std::chrono::milliseconds(10));
+    }
+    return last_;
+  }
+
+  std::shared_ptr<MapToMap> node_;
+  std::shared_ptr<rclcpp::Node> listener_;
+  rclcpp::executors::SingleThreadedExecutor executor_;
+  rclcpp::Subscription<OccupancyGrid>::SharedPtr sub_;
+  OccupancyGrid::SharedPtr last_;
+};
+
+octomap_msgs::msg::Octomap colorTree() {
+  octomap::ColorOcTree tree(0.1);
+  tree.updateNode(octomap::point3d(0.05f, 0.05f, 0.05f), true);
+  octomap_msgs::msg::Octomap msg;
+  msg.header.frame_id = "map";
+  octomap_msgs::fullMapToMsg(tree, msg);
+  return msg;
+}
+
+TEST_F(MapToMapOwnership, H04_ReplacedAndRejectedTreesAreReleased) {
+  const auto first = convert(flatFloor());
+  ASSERT_TRUE(first);
+  const auto replaced = convert(flatFloor());  // the old tree is replaced
+  ASSERT_TRUE(replaced);
+  EXPECT_EQ(replaced->data, first->data);
+  EXPECT_FALSE(convert(colorTree()));  // not an OcTree: nothing published
+  const auto again = convert(flatFloor());
+  ASSERT_TRUE(again);
+  EXPECT_EQ(again->data, first->data);
+  EXPECT_EQ(again->info.width, first->info.width);
+  EXPECT_EQ(again->info.height, first->info.height);
 }
 
 }  // namespace

@@ -37,8 +37,8 @@ private:
   mapconversion_msgs::msg::HeightMap heightMsg;
   mapconversion_msgs::msg::SlopeMap slopeMsg;
 
-  MapConverter *MC;
-  octomap::OcTree *OcMap;
+  std::unique_ptr<MapConverter> MC;       // N-3: created by the first OctoMap
+  std::unique_ptr<octomap::OcTree> OcMap;  // H-04: the latest OctoMap
 
   double resolution = 0.0;  // set from the first OctoMap
   double slopeMax;
@@ -128,24 +128,23 @@ public:
       pubMapSlopeVis = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
           "/visualization_slope_map", 5);
     }
-    OcMap = NULL;
-    MC = NULL;
   }
 
   ~MapToMap() {}
 
   void mapCallback(octomap_msgs::msg::Octomap msg) {
     // Set resulution
-    if (MC == NULL) {
+    if (!MC) {
       resolution = msg.resolution;
-      MC = new MapConverter(resolution, slopeEstimationSize, minimumZ,
-                            minimumOccupancy);
+      MC = std::make_unique<MapConverter>(resolution, slopeEstimationSize,
+                                          minimumZ, minimumOccupancy);
     }
     // Convert ROS message to Octomap
-    octomap::AbstractOcTree *tree = octomap_msgs::msgToMap(msg);
-    octomap::OcTree *newOcMap = dynamic_cast<octomap::OcTree *>(tree);
-    if (!(newOcMap))
-      return;
+    std::unique_ptr<octomap::AbstractOcTree> tree(octomap_msgs::msgToMap(msg));
+    if (!dynamic_cast<octomap::OcTree *>(tree.get()))
+      return;  // not an OcTree: released with `tree`
+    std::unique_ptr<octomap::OcTree> newOcMap(
+        static_cast<octomap::OcTree *>(tree.release()));
 
     double min_x, min_y, min_z;
     double max_x, max_y, max_z;
@@ -153,17 +152,15 @@ public:
     newOcMap->getMetricMin(min_x, min_y, min_z);
     newOcMap->getMetricMax(max_x, max_y, max_z);
     vector<double> minMax(6);
-    if (OcMap == NULL || !partial_map_updates) {
+    if (!OcMap || !partial_map_updates) {
       minMax[0] = min_x;
       minMax[1] = max_x;
       minMax[2] = min_y;
       minMax[3] = max_y;
-      OcMap = newOcMap;
     } else {
-      computeBoundingBox(minMax, newOcMap, OcMap);
-      delete OcMap;
-      OcMap = newOcMap;
+      computeBoundingBox(minMax, newOcMap.get(), OcMap.get());
     }
+    OcMap = std::move(newOcMap);  // the previous tree is released
     minMax[4] = min_z;
     minMax[5] = max_z;
 
