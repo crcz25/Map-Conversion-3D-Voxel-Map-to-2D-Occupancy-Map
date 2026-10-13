@@ -6,9 +6,10 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
     return LaunchDescription([
-        # The frame of the OctoMap and of the 2D maps; the scene graph uses
-        # one frame for every layer (scene_graph_ros: map_frame, default odom).
-        DeclareLaunchArgument('map_frame', default_value='odom'),
+        # The 2D maps carry the OctoMap's stamp and frame. A non-empty
+        # map_frame replaces the frame only; the scene graph uses one frame
+        # for every layer (scene_graph_ros: map_frame, default odom).
+        DeclareLaunchArgument('map_frame', default_value=''),
         DeclareLaunchArgument('use_sim_time', default_value='false'),
         Node(
             package='mapconversion',

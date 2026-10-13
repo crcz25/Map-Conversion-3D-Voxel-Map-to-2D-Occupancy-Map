@@ -67,7 +67,9 @@ public:
     slopeEstimationSize = max(slopeEstimationSize, 2);
     minimumZ = this->declare_parameter("minimum_z", 1.0);
     minimumOccupancy = this->declare_parameter("minimum_occupancy", 10);
-    mapFrame = this->declare_parameter("map_frame", string("map"));
+    // Empty: the outputs keep the OctoMap's frame; otherwise it replaces the
+    // frame (the stamp is always the OctoMap's).
+    mapFrame = this->declare_parameter("map_frame", string(""));
     mapZpos = this->declare_parameter("map_position_z", 0.0);
     partial_map_updates = this->declare_parameter("partial_map_updates", false);
     sub_qos_reliable = this->declare_parameter("subscriber_qos_reliable", true);
@@ -166,7 +168,10 @@ public:
     minMax[5] = max_z;
 
     update2Dmap(minMax);
-    pub();
+    std_msgs::msg::Header header = msg.header;
+    if (!mapFrame.empty())
+      header.frame_id = mapFrame;
+    pub(header);
   }
 
   void computeBoundingBox(vector<double> &minMax, octomap::OcTree *tree1,
@@ -251,10 +256,11 @@ public:
     MC->updateMap(voxelList, minMax);
   }
 
-  void pub() {
-    mapMsg.header.stamp = this->now();
-    mapMsg.header.frame_id = mapFrame;
-    heightMsg.header = mapMsg.header;
+  // Publishes every map with `header` (the OctoMap's stamp and frame).
+  void pub(const std_msgs::msg::Header &header) {
+    mapMsg.header = header;
+    heightMsg.header = header;
+    slopeMsg.header = header;
     mapMsg.info.width = MC->map.sizeX();
     mapMsg.info.height = MC->map.sizeY();
     mapMsg.info.resolution = MC->map.getResulution();
@@ -283,7 +289,6 @@ public:
             "\'<param name=\"max_slope_ugv\" value=\"x\"/>\' in launch file.");
       }
 
-      mapMsg.header.stamp = this->now();
       for (int y = 0; y < MC->map.sizeY(); y++) {
         for (int x = 0; x < MC->map.sizeX(); x++) {
           int index = x + y * MC->map.sizeX();

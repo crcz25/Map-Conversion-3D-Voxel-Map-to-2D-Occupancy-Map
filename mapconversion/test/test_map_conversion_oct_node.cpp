@@ -37,7 +37,11 @@
 #include "../src/map_conversion_oct_node.cpp"  // NOLINT(bugprone-suspicious-include): the test seam
 #undef main
 
+#include <map>
 #include <string>
+#include <vector>
+
+#include <std_msgs/msg/header.hpp>
 
 namespace {
 
@@ -129,6 +133,82 @@ TEST_F(MapToMapVisualization, UnknownCellsAreMinusOneAndAFlatMapIsNotDividedByZe
   for (const int8_t v : received_.at("/visualization_floor_map")->data) {
     EXPECT_TRUE(v == -1 || v == 0) << static_cast<int>(v);
   }
+}
+
+// M-28: every map output carries the OctoMap's stamp and frame; a
+// non-empty map_frame parameter overrides the frame only.
+class MapToMapHeaders : public ::testing::Test {
+protected:
+  static void SetUpTestSuite() { rclcpp::init(0, nullptr); }
+  static void TearDownTestSuite() { rclcpp::shutdown(); }
+
+  template <typename Msg> void listen(const std::string &topic) {
+    subs_.push_back(listener_->create_subscription<Msg>(
+        topic, 5, [this, topic](typename Msg::SharedPtr m) {
+          headers_[topic] = m->header;
+        }));
+  }
+
+  // Converts flatFloor() stamped (1234 s, 5678 ns) in "octomap_frame" with
+  // a node built from `options`; returns false if not every output arrived.
+  bool convert(const rclcpp::NodeOptions &options) {
+    node_ = std::make_shared<MapToMap>(options);
+    listener_ = std::make_shared<rclcpp::Node>("header_listener");
+    listen<OccupancyGrid>("/mapUAV");
+    listen<OccupancyGrid>("/mapUGV");
+    listen<mapconversion_msgs::msg::HeightMap>("/heightMap");
+    listen<mapconversion_msgs::msg::SlopeMap>("/slopeMap");
+    listen<OccupancyGrid>("/visualization_floor_map");
+    listen<OccupancyGrid>("/visualization_ceiling_map");
+    listen<OccupancyGrid>("/visualization_slope_map");
+    executor_.add_node(listener_);
+    // Bounded wait for discovery: pub() only fills maps that have readers.
+    for (int i = 0; i < 500; ++i) {
+      bool matched = true;
+      for (const auto &sub : subs_) {
+        matched = matched && sub->get_publisher_count() > 0;
+      }
+      if (matched) {
+        break;
+      }
+      executor_.spin_some(std::chrono::milliseconds(10));
+    }
+    octomap_msgs::msg::Octomap msg = flatFloor();
+    msg.header.stamp.sec = 1234;
+    msg.header.stamp.nanosec = 5678;
+    msg.header.frame_id = "octomap_frame";
+    node_->mapCallback(msg);
+    for (int i = 0; i < 500 && headers_.size() < subs_.size(); ++i) {
+      executor_.spin_some(std::chrono::milliseconds(10));
+    }
+    return headers_.size() == subs_.size();
+  }
+
+  void expectHeaders(const std::string &frame) {
+    for (const auto &[topic, header] : headers_) {
+      EXPECT_EQ(header.stamp.sec, 1234) << topic;
+      EXPECT_EQ(header.stamp.nanosec, 5678u) << topic;
+      EXPECT_EQ(header.frame_id, frame) << topic;
+    }
+  }
+
+  std::shared_ptr<MapToMap> node_;
+  std::shared_ptr<rclcpp::Node> listener_;
+  rclcpp::executors::SingleThreadedExecutor executor_;
+  std::vector<rclcpp::SubscriptionBase::SharedPtr> subs_;
+  std::map<std::string, std_msgs::msg::Header> headers_;
+};
+
+TEST_F(MapToMapHeaders, M28_OutputsCarryTheInputStampAndFrame) {
+  ASSERT_TRUE(convert(rclcpp::NodeOptions())) << headers_.size() << " outputs";
+  expectHeaders("octomap_frame");
+}
+
+TEST_F(MapToMapHeaders, M28_MapFrameOverridesOnlyTheFrame) {
+  rclcpp::NodeOptions options;
+  options.parameter_overrides({{"map_frame", "override_frame"}});
+  ASSERT_TRUE(convert(options)) << headers_.size() << " outputs";
+  expectHeaders("override_frame");
 }
 
 }  // namespace
