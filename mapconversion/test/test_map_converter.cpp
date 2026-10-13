@@ -1,8 +1,7 @@
 // MapConverter::updateMap: voxels to the 2D occupancy and height maps, and
 // the occupancy written to unknown neighbours of free cells. The
-// DISABLED_H05_* test reproduces audit H-05: it asserts the correct
-// behaviour and fails on the current code (run it with
-// --gtest_also_run_disabled_tests).
+// H05_* tests cover audit H-05 (the neighbour write used the centre cell's
+// y).
 //
 // The map is a 7 x 7 grid of 1 m cells. Every cell has a 1 m free voxel
 // except the wall cell (3, 4), which has an occupied voxel of the same
@@ -10,6 +9,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <utility>
 #include <vector>
@@ -27,11 +27,15 @@ voxel cellVoxel(int x, int y, bool occupied) {
   return voxel{{x + 0.5, y + 0.5, 0.5}, 0.5f, occupied};
 }
 
-MapConverter convertedRoom() {
+MapConverter convertedRoom(
+    const std::vector<std::pair<int, int>> &walls = {{kWallX, kWallY}}) {
   std::vector<voxel> voxels;
   for (int x = 0; x < kSize; ++x) {
     for (int y = 0; y < kSize; ++y) {
-      voxels.push_back(cellVoxel(x, y, x == kWallX && y == kWallY));
+      const bool wall =
+          std::find(walls.begin(), walls.end(), std::make_pair(x, y)) !=
+          walls.end();
+      voxels.push_back(cellVoxel(x, y, wall));
     }
   }
   // resolution 1 m, slope window 1, minimum free height 0.5 m, minimum
@@ -88,10 +92,26 @@ TEST(MapConverter, HorizontalNeighbourWriteMarksTheWallOccupied) {
 // H-05: the neighbour write pairs the neighbour's x with the centre cell's
 // y. Free cells (2, 3), (3, 3) and (4, 3) reach the wall at (3, 4) along y
 // or diagonally and write its occupancy to (3, 3), a free cell.
-TEST(MapConverter, DISABLED_H05_NeighbourWriteUsesTheNeighbourY) {
+TEST(MapConverter, H05_NeighbourWriteUsesTheNeighbourY) {
   MapConverter converter = convertedRoom();
   EXPECT_EQ(converter.map.get(kWallX, kWallY - 1), 0);
   EXPECT_EQ(converter.map.get(kWallX, kWallY), 100);
+}
+
+// H-05: two walls that free cells reach along x, along y and diagonally,
+// so most neighbour writes have a neighbour y that differs from the centre
+// y. Every cell of the evaluated area must hold its own value: the walls
+// 100, the free cells 0.
+TEST(MapConverter, H05_EveryNeighbourWriteHitsOnlyTheWall) {
+  const std::vector<std::pair<int, int>> walls = {{3, 4}, {4, 2}};
+  MapConverter converter = convertedRoom(walls);
+  for (int x = 1; x < kSize - 1; ++x) {
+    for (int y = 1; y < kSize - 1; ++y) {
+      const bool wall = std::find(walls.begin(), walls.end(),
+                                  std::make_pair(x, y)) != walls.end();
+      EXPECT_EQ(converter.map.get(x, y), wall ? 100 : 0) << x << "," << y;
+    }
+  }
 }
 
 }  // namespace
