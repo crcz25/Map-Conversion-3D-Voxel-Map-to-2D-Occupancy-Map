@@ -40,7 +40,10 @@ ament_target_dependencies(path_converter_node
 )
 
 # Create library from MapConverter class
-add_library(map_conversion_class src/MapConverter.cpp)
+# STATIC: only the executables are installed. Without a type the library
+# follows BUILD_SHARED_LIBS, which ament_cmake_ros (the tests) caches ON, and
+# the installed node then cannot find it (P3-N1).
+add_library(map_conversion_class STATIC src/MapConverter.cpp)
 ament_target_dependencies(map_conversion_class 
   Eigen3
 )
