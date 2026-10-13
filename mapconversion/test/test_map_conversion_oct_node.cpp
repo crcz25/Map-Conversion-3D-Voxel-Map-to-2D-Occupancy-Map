@@ -1,6 +1,6 @@
 // MapToMap's visualization maps (map_conversion_oct_node). The class lives
 // in src/map_conversion_oct_node.cpp, next to main(), with no header, so this
-// test compiles that file with main() renamed. The source is unchanged.
+// test compiles that file with main() renamed.
 //
 // This test is built with -fsanitize=float-divide-by-zero,float-cast-overflow
 // (not recoverable): a NaN or out-of-range double written to an int8 cell,
