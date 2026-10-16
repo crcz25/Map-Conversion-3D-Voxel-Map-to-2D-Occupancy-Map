@@ -15,8 +15,8 @@ public:
     subMapOffsetY = 0;
     growSubMaps(1, 1);
 
-    MatrixXd A(9, 3);
-    vector<point3D> points;
+    Eigen::MatrixXd A(9, 3);
+    std::vector<point3D> points;
     for (int dx = -1; dx <= 1; dx++) {
       for (int dy = -1; dy <= 1; dy++) {
         point3D p = {double(dx), double(dy), 0};
@@ -29,9 +29,9 @@ public:
       A(i, 2) = 1;
     }
 
-    MatrixXd AtA = A.transpose() * A;
-    MatrixXd AtA_inv = AtA.inverse();
-    MatrixXd At = A.transpose();
+    Eigen::MatrixXd AtA = A.transpose() * A;
+    Eigen::MatrixXd AtA_inv = AtA.inverse();
+    Eigen::MatrixXd At = A.transpose();
     preCalcA = AtA_inv * At;
   }
 
@@ -43,8 +43,8 @@ public:
   Map2D &operator=(Map2D &&) = default;
 
   // get all occupancy data
-  vector<int> get() {
-    vector<int> newData;
+  std::vector<int> get() {
+    std::vector<int> newData;
     for (int y = 0; y < sizeY(); y++) {
       for (int x = 0; x < sizeX(); x++) {
         newData.push_back(get(x, y));
@@ -54,12 +54,12 @@ public:
   }
 
   // get all occupancy data filtered through slope threshold
-  vector<int> get(double slope) {
-    vector<int> newData;
+  std::vector<int> get(double slope) {
+    std::vector<int> newData;
     for (int y = 0; y < sizeY(); y++) {
       for (int x = 0; x < sizeX(); x++) {
         double newSlope = getSlope(x, y);
-        if (!isnan(newSlope) && newSlope > slope) {
+        if (!std::isnan(newSlope) && newSlope > slope) {
           newData.push_back(100);
         } else {
           newData.push_back(get(x, y));
@@ -99,8 +99,8 @@ public:
   }
 
   // get all floor data
-  vector<double> getHeight() {
-    vector<double> newData;
+  std::vector<double> getHeight() {
+    std::vector<double> newData;
     for (int y = 0; y < sizeY(); y++) {
       for (int x = 0; x < sizeX(); x++) {
         newData.push_back(getHeight(x, y));
@@ -126,8 +126,8 @@ public:
   }
 
   // get all ceiling data
-  vector<double> getHeightTop() {
-    vector<double> newData;
+  std::vector<double> getHeightTop() {
+    std::vector<double> newData;
     for (int y = 0; y < sizeY(); y++) {
       for (int x = 0; x < sizeX(); x++) {
         newData.push_back(getHeightTop(x, y));
@@ -153,8 +153,8 @@ public:
   }
 
   // get all slope data
-  vector<double> getSlope() {
-    vector<double> newData;
+  std::vector<double> getSlope() {
+    std::vector<double> newData;
     for (int y = 0; y < sizeY(); y++) {
       for (int x = 0; x < sizeX(); x++) {
         newData.push_back(getSlope(x, y));
@@ -269,12 +269,12 @@ public:
   void updateSlope(int areaSize, int minX, int maxX, int minY, int maxY) {
     for (int x = minX + 1; x < maxX - 1; x++) {
       for (int y = minY + 1; y < maxY - 1; y++) {
-        if (isnan(getHeight(x, y)))
+        if (std::isnan(getHeight(x, y)))
           continue; // do not calculate slope for empty cells
-        vector<point3D> points;
+        std::vector<point3D> points;
         for (int dx = -areaSize; dx <= areaSize; dx++) {
           for (int dy = -areaSize; dy <= areaSize; dy++) {
-            if (isnan(getHeight(x + dx, y + dy)))
+            if (std::isnan(getHeight(x + dx, y + dy)))
               continue;
             point3D p = {double(dx), double(dy), getHeight(x + dx, y + dy)};
             points.push_back(p);
@@ -283,7 +283,7 @@ public:
         if (points.size() < 3)
           continue; // to slove MS problem at least 3 points is needed
         point2D p = getSlopeOfPoints(points);
-        setSlope(x, y, sqrt(p.x * p.x + p.y * p.y));
+        setSlope(x, y, std::sqrt(p.x * p.x + p.y * p.y));
       }
     }
   }
@@ -291,31 +291,31 @@ public:
 private:
   // M-30: a tile is SUBMAP_SIZE x SUBMAP_SIZE cells, row x then y
   // (cell(x, y)); an empty tile is not allocated yet (reads as unknown).
-  using IntTile = vector<int>;
-  using DoubleTile = vector<double>;
+  using IntTile = std::vector<int>;
+  using DoubleTile = std::vector<double>;
   static int cell(int indexX, int indexY) {
     return indexX * SUBMAP_SIZE + indexY;
   }
 
-  vector<vector<IntTile>> subMap;
-  vector<vector<DoubleTile>> subMapHeight;
-  vector<vector<DoubleTile>> subMapHeightTop;
-  vector<vector<DoubleTile>> subMapSlope;
+  std::vector<std::vector<IntTile>> subMap;
+  std::vector<std::vector<DoubleTile>> subMapHeight;
+  std::vector<std::vector<DoubleTile>> subMapHeightTop;
+  std::vector<std::vector<DoubleTile>> subMapSlope;
   int subMapOffsetX;
   int subMapOffsetY;
   int mapSizeX, mapSizeY;
   double mapOffsetX, mapOffsetY;
   double resolution;
-  MatrixXd preCalcA;
+  Eigen::MatrixXd preCalcA;
 
   // fits to palne and calculates slope of plane and return maximum slope
-  point2D getSlopeOfPoints(vector<point3D> points) {
+  point2D getSlopeOfPoints(std::vector<point3D> points) {
     int n = points.size();
     double a, b, c;
     // Construct matrix A and vector B
-    MatrixXd A(n, 3);
-    VectorXd B(n);
-    VectorXd x(3);
+    Eigen::MatrixXd A(n, 3);
+    Eigen::VectorXd B(n);
+    Eigen::VectorXd x(3);
     for (int i = 0; i < n; ++i) {
       B(i) = points[i].z;
     }
@@ -369,8 +369,8 @@ private:
     }
     x += subMapOffsetX;
     y += subMapOffsetY;
-    subIndexX = x / SUBMAP_SIZE - signbit(x);
-    subIndexY = y / SUBMAP_SIZE - signbit(y);
+    subIndexX = x / SUBMAP_SIZE - std::signbit(x);
+    subIndexY = y / SUBMAP_SIZE - std::signbit(y);
 
     int growX = 0, growY = 0;
     if (subMap.size() <= subIndexX) {
@@ -402,26 +402,26 @@ private:
     // get size of new subMaps
     int newSizeX, newSizeY;
     if (subMap.size() == 0) {
-      newSizeX = abs(growX);
-      newSizeY = abs(growY);
+      newSizeX = std::abs(growX);
+      newSizeY = std::abs(growY);
     } else {
       if (growX != 0)
-        growX = growX / abs(growX) * max(int(subMap.size()), abs(growX));
+        growX = growX / std::abs(growX) * std::max(int(subMap.size()), std::abs(growX));
       if (growY != 0)
-        growY = growY / abs(growY) * max(int(subMap[0].size()), abs(growY));
-      newSizeX = subMap.size() + abs(growX);
-      newSizeY = subMap[0].size() + abs(growY);
+        growY = growY / std::abs(growY) * std::max(int(subMap[0].size()), std::abs(growY));
+      newSizeX = subMap.size() + std::abs(growX);
+      newSizeY = subMap[0].size() + std::abs(growY);
     }
     // generate new subMaps
-    vector<vector<IntTile>> newSubMap(newSizeX);
-    vector<vector<DoubleTile>> newSubMapHeight(newSizeX);
-    vector<vector<DoubleTile>> newSubMapHeightTop(newSizeX);
-    vector<vector<DoubleTile>> newSubMapSlope(newSizeX);
+    std::vector<std::vector<IntTile>> newSubMap(newSizeX);
+    std::vector<std::vector<DoubleTile>> newSubMapHeight(newSizeX);
+    std::vector<std::vector<DoubleTile>> newSubMapHeightTop(newSizeX);
+    std::vector<std::vector<DoubleTile>> newSubMapSlope(newSizeX);
     for (int i = 0; i < newSizeX; i++) {
-      newSubMap[i] = vector<IntTile>(newSizeY);
-      newSubMapHeight[i] = vector<DoubleTile>(newSizeY);
-      newSubMapHeightTop[i] = vector<DoubleTile>(newSizeY);
-      newSubMapSlope[i] = vector<DoubleTile>(newSizeY);
+      newSubMap[i] = std::vector<IntTile>(newSizeY);
+      newSubMapHeight[i] = std::vector<DoubleTile>(newSizeY);
+      newSubMapHeightTop[i] = std::vector<DoubleTile>(newSizeY);
+      newSubMapSlope[i] = std::vector<DoubleTile>(newSizeY);
     }
     int offsetIndexX = growX < 0 ? -growX : 0;
     int offsetIndexY = growY < 0 ? -growY : 0;

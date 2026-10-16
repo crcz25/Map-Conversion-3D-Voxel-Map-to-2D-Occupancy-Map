@@ -1,14 +1,16 @@
 #pragma once
 #include "datatypes.hh"
 
-point_int DIRECTIONS[] = {{1, 0},  {1, 1},   {0, 1},  {-1, 1},
+// M-26: inline, so that every translation unit that includes this header
+// shares one definition (it was one per unit, an ODR violation at link).
+inline constexpr point_int DIRECTIONS[] = {{1, 0},  {1, 1},   {0, 1},  {-1, 1},
                           {-1, 0}, {-1, -1}, {0, -1}, {1, -1}};
 
 class HeightRangeMap {
 public:
-  vector<vector<vector<heightRange>>> free;
-  vector<vector<vector<heightRange>>> occupied;
-  vector<vector<point2D>> posMap;
+  std::vector<std::vector<std::vector<heightRange>>> free;
+  std::vector<std::vector<std::vector<heightRange>>> occupied;
+  std::vector<std::vector<point2D>> posMap;
 
   HeightRangeMap(int width = 0, int height = 0) { setSize(width, height); }
 
@@ -56,7 +58,7 @@ public:
       if (y + d.y < 0 || y + d.y >= free.back().size())
         continue;
       occupation =
-          max(occupation, getOccupation(x, y, index, x + d.x, y + d.y, minOcc));
+          std::max(occupation, getOccupation(x, y, index, x + d.x, y + d.y, minOcc));
     }
     return occupation;
   }
@@ -69,19 +71,19 @@ public:
     if (index < 0 || index >= free[x2][y2].size())
       return -1;
     heightRange freeHr = free[x2][y2][index];
-    vector<heightRange> occupiedHr = occupied[x1][y1];
+    std::vector<heightRange> occupiedHr = occupied[x1][y1];
 
     return getOccupation(freeHr, occupiedHr, minOcc);
   }
 
   // returns the occupation level of a cell compared to a free heightRange in
   // range 0-100
-  int getOccupation(heightRange freeHr, vector<heightRange> occupiedHr,
+  int getOccupation(heightRange freeHr, std::vector<heightRange> occupiedHr,
                     int minOcc) {
     double overlapDistans = 0;
     for (auto oHr : occupiedHr) {
-      heightRange compare = {min(freeHr.top, oHr.top),
-                             max(freeHr.bottom, oHr.bottom)};
+      heightRange compare = {std::min(freeHr.top, oHr.top),
+                             std::max(freeHr.bottom, oHr.bottom)};
       if (compare.top - compare.bottom < 0)
         continue;
       overlapDistans += compare.top - compare.bottom;
@@ -90,13 +92,13 @@ public:
         int(overlapDistans / (freeHr.top - freeHr.bottom) * 100) * 2;
     if (occupation < minOcc)
       return -1;
-    return min(occupation, 100);
+    return std::min(occupation, 100);
   }
 
 private:
   // Inserts a heightRange in a list, of the highRanges overlap in the list,
   // they are merged
-  void inserthghtRange(heightRange hr, vector<heightRange> *list) {
+  void inserthghtRange(heightRange hr, std::vector<heightRange> *list) {
     int overlapIndex = -1;
     for (int i = 0; i < list->size(); i++) {
       if (hr.top < list->at(i).bottom)
@@ -110,8 +112,8 @@ private:
       heightRange hrNew;
       heightRange hrOld = list->at(overlapIndex);
       list->erase(list->begin() + overlapIndex);
-      hrNew.top = max(hrOld.top, hr.top);
-      hrNew.bottom = min(hrOld.bottom, hr.bottom);
+      hrNew.top = std::max(hrOld.top, hr.top);
+      hrNew.bottom = std::min(hrOld.bottom, hr.bottom);
       inserthghtRange(hrNew, list);
       return;
     }

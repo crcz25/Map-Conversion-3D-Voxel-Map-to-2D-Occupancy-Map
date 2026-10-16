@@ -11,10 +11,10 @@ public:
   MapConverter(double resolution, int slopeEstimationSize, double minimumZ,
                int minimumOccupancy);
   // update global map in region of the voxels given
-  void updateMap(vector<voxel> vMap, vector<double> minMax);
+  void updateMap(std::vector<voxel> vMap, std::vector<double> minMax);
   // get the min max values in x and y for given voxel list agins map frame.
   // Returns vector with <minX, maxX, minY, maxY, minZ, maxZ>
-  vector<double> minMaxVoxel(vector<voxel> list);
+  std::vector<double> minMaxVoxel(std::vector<voxel> list);
 
 private:
   int slopeEstimationSize;

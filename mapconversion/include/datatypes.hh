@@ -2,9 +2,6 @@
 #include <Eigen/Dense>
 #include <vector>
 
-using namespace std;
-using namespace Eigen;
-
 struct point_int {
   int x, y;
 };
